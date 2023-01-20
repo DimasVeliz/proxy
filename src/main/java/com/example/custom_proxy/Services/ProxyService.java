@@ -3,10 +3,17 @@ package com.example.custom_proxy.Services;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyManagementException;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 import java.util.Dictionary;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.Iterator;
+
+import javax.net.ssl.SSLContext;
+
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.ClientHttpRequestFactory;
@@ -28,6 +35,19 @@ import org.springframework.http.client.BufferingClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
 import org.springframework.retry.annotation.Backoff;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.apache.hc.client5.http.classic.HttpClient;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.client5.http.io.HttpClientConnectionManager;
+import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
+import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactoryBuilder;
+import org.apache.hc.client5.http.ssl.TrustAllStrategy;
+import org.apache.hc.client5.http.ssl.TrustSelfSignedStrategy;
+import org.apache.hc.core5.ssl.SSLContextBuilder;
+import org.apache.hc.core5.ssl.SSLContexts;
 
 @Service
 public class ProxyService {
@@ -39,25 +59,96 @@ public class ProxyService {
     public ProxyService() {
     }
 
-    @Retryable(exclude = {HttpStatusCodeException.class }, 
-                include = Exception.class, 
-                backoff = @Backoff(delay = 5000, multiplier = 4.0), maxAttempts = 4)
+    @Retryable(exclude = {
+            HttpStatusCodeException.class }, include = Exception.class, backoff = @Backoff(delay = 5000, multiplier = 4.0), maxAttempts = 4)
     public ResponseEntity<String> processProxyRequest(String body,
             HttpMethod method, HttpServletRequest request, HttpServletResponse response, String traceId)
-            throws URISyntaxException {
-        
+            throws URISyntaxException, KeyManagementException, NoSuchAlgorithmException, KeyStoreException {
+
         ThreadContext.put("traceId", traceId);
-        String requestUrl = request.getRequestURI();
 
-       
-        URI uri = new URI(protocolToUse, null, domain, puerto, null, null, null);
+        URI uri = this.buildURI(request);
+        HttpHeaders headers = loadHeaders(request);
+        SetAdditionalHeaders(headers, traceId);
+        RemoveExtraHeaders(headers);
 
-        // replacing context path form urI to match actual gateway URI
-        uri = UriComponentsBuilder.fromUri(uri)
-                .path(requestUrl)
-                .query(request.getQueryString())
-                .build(true).toUri();
+        HttpEntity<String> httpEntity = new HttpEntity<>(body, headers);
 
+        CloseableHttpClient httpClient = buildClient();
+
+        HttpComponentsClientHttpRequestFactory clientrequestFactory = new HttpComponentsClientHttpRequestFactory();
+
+        clientrequestFactory.setHttpClient(httpClient);
+
+        RestTemplate restTemplate = new RestTemplate(clientrequestFactory);
+                
+        //old
+        //var clientFactory = new SimpleClientHttpRequestFactory();
+
+        //ClientHttpRequestFactory factory = new BufferingClientHttpRequestFactory(clientFactory);
+
+        // RestTemplate restTemplate = new RestTemplate(factory);
+        try {
+
+            ResponseEntity<String> serverResponse = restTemplate.exchange(uri, method, httpEntity, String.class);
+            HttpHeaders responseHeaders = new HttpHeaders();
+            responseHeaders.put(HttpHeaders.CONTENT_TYPE, serverResponse.getHeaders().get(HttpHeaders.CONTENT_TYPE));
+
+            return serverResponse;
+
+        } catch (HttpStatusCodeException e) {
+
+            return ResponseEntity.status(e.getStatusCode())
+                    .headers(e.getResponseHeaders())
+                    .body(e.getResponseBodyAsString());
+        }
+
+    }
+
+    private CloseableHttpClient buildClient() {
+        // version 5.0
+        try {
+            final SSLContext sslcontext = this.configureSSLContext();
+            
+            final SSLConnectionSocketFactory sslSocketFactory = SSLConnectionSocketFactoryBuilder.create()
+                    .setSslContext(sslcontext)
+                    .build();
+            final HttpClientConnectionManager cm = PoolingHttpClientConnectionManagerBuilder.create()
+                    .setSSLSocketFactory(sslSocketFactory)
+                    .build();
+            return HttpClients.custom()
+                    .setConnectionManager(cm)
+                    .evictExpiredConnections()
+                    .build();
+
+        } catch (NoSuchAlgorithmException | KeyStoreException | KeyManagementException e) {
+
+        }
+        return null;
+    }
+
+    public SSLContext configureSSLContext()
+            throws KeyManagementException, NoSuchAlgorithmException, KeyStoreException {
+        if (!protocolToUse.equals("HTTPS")) {
+            return SSLContexts.custom()
+            .loadTrustMaterial(null, new TrustAllStrategy())
+            .build();
+        }
+        SSLContext sslContext = new SSLContextBuilder()
+                .loadTrustMaterial(null, new TrustSelfSignedStrategy())
+                .build();
+        return sslContext;
+    }
+
+    private void RemoveExtraHeaders(HttpHeaders headers) {
+        headers.remove(HttpHeaders.ACCEPT_ENCODING);
+    }
+
+    private void SetAdditionalHeaders(HttpHeaders headers, String traceId) {
+        headers.set("TRACE", traceId);
+    }
+
+    private HttpHeaders loadHeaders(HttpServletRequest request) {
         HttpHeaders headers = new HttpHeaders();
         Enumeration<String> headerNames = request.getHeaderNames();
 
@@ -66,37 +157,33 @@ public class ProxyService {
             headers.set(headerName, request.getHeader(headerName));
         }
 
-        headers.set("TRACE", traceId);
-        headers.remove(HttpHeaders.ACCEPT_ENCODING);
+        return headers;
+    }
 
-        HttpEntity<String> httpEntity = new HttpEntity<>(body, headers);
-        ClientHttpRequestFactory factory = new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory());
-        RestTemplate restTemplate = new RestTemplate(factory);
-        try {
+    private URI buildURI(HttpServletRequest request) throws URISyntaxException {
+        String requestUrl = request.getRequestURI();
 
-            ResponseEntity<String> serverResponse = restTemplate.exchange(uri, method, httpEntity, String.class);
-            HttpHeaders responseHeaders = new HttpHeaders();
-            responseHeaders.put(HttpHeaders.CONTENT_TYPE, serverResponse.getHeaders().get(HttpHeaders.CONTENT_TYPE));
-           
-            return serverResponse;
+        URI uri = new URI(protocolToUse, null, domain, puerto, null, null, null);
 
-        } catch (HttpStatusCodeException e) {
-            
-            return ResponseEntity.status(e.getStatusCode())
-                    .headers(e.getResponseHeaders())
-                    .body(e.getResponseBodyAsString());
-        }
-
+        // replacing context path form urI to match actual gateway URI
+        uri = UriComponentsBuilder.fromUri(uri)
+                .path(requestUrl)
+                .query(request.getQueryString())
+                .build(true).toUri();
+        return uri;
     }
 
     @Recover
     public ResponseEntity<String> recoverFromRestClientErrors(Exception e, String body,
             HttpMethod method, HttpServletRequest request, HttpServletResponse response, String traceId) {
-        System.out.println("retry method for the following url " + request.getRequestURI() + " has failed" + e.getMessage());
+        System.out.println(
+                "retry method for the following url " + request.getRequestURI() + " has failed" + e.getMessage());
         System.out.println(e.getStackTrace());
         throw new RuntimeException("There was an error trying to process you request. Please try again later");
 
     }
+
+    // Extra, for printing info
 
     public void printURL(HttpServletRequest request) {
         System.out.println("URL TO VISIT :");
@@ -131,8 +218,21 @@ public class ProxyService {
         System.out.println(queryString);
     }
 
-    public void printDecodedBody(String body) {        
+    public void printDecodedBody(String body) {
+        System.out.println("Body GOTTEN: ");
         System.out.println(body);
+    }
+
+    public void printCookies(HttpServletRequest request) {
+        var cookies = request.getCookies();
+        System.out.println("Cookies GOTTEN: ");
+        if (cookies == null) {
+            System.out.println("-");
+            return;
+        }
+        for (var cookie : cookies) {
+            System.out.println(cookie);
+        }
     }
 
 }

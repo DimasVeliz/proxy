@@ -1,6 +1,9 @@
 package com.example.custom_proxy.Controllers;
 
 import java.net.URISyntaxException;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.UUID;
@@ -21,26 +24,28 @@ import jakarta.servlet.http.HttpServletResponse;
 @RestController
 public class ProxyController {
 
-    @Autowired
     ProxyService service;
+
+    @Autowired
     public ProxyController(ProxyService service) {
         super();
-        this.service=service;
+        this.service = service;
     }
-    
+
     @RequestMapping("/**")
     public ResponseEntity<String> sendRequestToSPM(@RequestBody(required = false) String body,
-                                                   HttpMethod method, HttpServletRequest request, HttpServletResponse response)
-            throws URISyntaxException {
-        
+            HttpMethod method, HttpServletRequest request, HttpServletResponse response)
+            throws URISyntaxException, KeyManagementException, NoSuchAlgorithmException, KeyStoreException {
+
         service.printURL(request);
         service.printQueryString(request);
         service.printHeaders(request);
-        service.printDecodedBody(body);        
-        
+        service.printDecodedBody(body);
+        service.printCookies(request);
 
-        
-        return service.processProxyRequest(body,method,request,response, UUID.randomUUID().toString());
+        var forwardedResponse = service.processProxyRequest(body, method, request, response,
+                UUID.randomUUID().toString());
+        return forwardedResponse;
     }
-    
+
 }
