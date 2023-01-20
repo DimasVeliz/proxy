@@ -21,6 +21,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+
+import com.example.custom_proxy.Configuration.Configuration;
+
 import org.apache.logging.log4j.ThreadContext;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -36,6 +39,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
@@ -52,11 +56,11 @@ import org.apache.hc.core5.ssl.SSLContexts;
 @Service
 public class ProxyService {
 
-    String domain = "127.0.0.1";
-    Integer puerto = 8081;
-    String protocolToUse = "http";
+    Configuration cofiguration;
 
-    public ProxyService() {
+    @Autowired
+    public ProxyService(Configuration config) {
+        this.cofiguration = config;
     }
 
     @Retryable(exclude = {
@@ -129,6 +133,8 @@ public class ProxyService {
 
     public SSLContext configureSSLContext()
             throws KeyManagementException, NoSuchAlgorithmException, KeyStoreException {
+        String protocolToUse = this.cofiguration.getBackEndProtocol();
+
         if (!protocolToUse.equals("HTTPS")) {
             return SSLContexts.custom()
             .loadTrustMaterial(null, new TrustAllStrategy())
@@ -162,8 +168,12 @@ public class ProxyService {
 
     private URI buildURI(HttpServletRequest request) throws URISyntaxException {
         String requestUrl = request.getRequestURI();
+        String protocolToUse = this.cofiguration.getBackEndProtocol();
+        
+        String domain = this.cofiguration.getBackEndHost();
+        int port = this.cofiguration.getBackEndPort();
 
-        URI uri = new URI(protocolToUse, null, domain, puerto, null, null, null);
+        URI uri = new URI(protocolToUse, null, domain, port, null, null, null);
 
         // replacing context path form urI to match actual gateway URI
         uri = UriComponentsBuilder.fromUri(uri)
