@@ -4,12 +4,9 @@ import java.net.URISyntaxException;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.util.Enumeration;
-import java.util.Iterator;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cglib.core.Local;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -45,7 +42,9 @@ public class ProxyController {
 
         var forwardedResponse = service.processProxyRequest(body, method, request, response,
                 UUID.randomUUID().toString());
+        
         System.out.println(forwardedResponse.getBody()); 
+        
         return forwardedResponse;
     }
 

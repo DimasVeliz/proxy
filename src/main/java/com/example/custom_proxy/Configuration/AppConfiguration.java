@@ -1,16 +1,23 @@
 package com.example.custom_proxy.Configuration;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
-public class Configuration {
+@Configuration
+public class AppConfiguration {
+    
+    private Environment env;
     
     @Autowired
-    private Environment env;
+    public AppConfiguration(Environment env) {
+        this.env=env;
+    }
 
     public String getBackEndHost()
     {
-        return env.getProperty("backend_host");
+        var value = env.getProperty("backend_host");
+        return value;
     }
     public int getBackEndPort()
     {
@@ -19,12 +26,14 @@ public class Configuration {
     }
     public String getBackEndProtocol()
     {
-        return env.getProperty("backend_protocol");
+        var value = env.getProperty("backend_protocol");
+        return value;
     }
 
     public String getProxyHost()
     {
-        return env.getProperty("proxy_host");
+        var value = env.getProperty("proxy_host");
+        return value;
     }
     public int getProxyPort()
     {
@@ -33,6 +42,7 @@ public class Configuration {
     }
     public String getProxyProtocol()
     {
-        return env.getProperty("proxy_protocol");
+        var value = env.getProperty("proxy_protocol");
+        return value;
     }
 }
