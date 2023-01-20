@@ -45,6 +45,7 @@ public class ProxyController {
 
         var forwardedResponse = service.processProxyRequest(body, method, request, response,
                 UUID.randomUUID().toString());
+        System.out.println(forwardedResponse.getBody()); 
         return forwardedResponse;
     }
 
