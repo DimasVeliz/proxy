@@ -1,0 +1,54 @@
+{
+    "server": {
+        "port": 8080,
+        "host": "localhost"
+    },
+    "frontend": {
+        "port": 3000,
+        "host": "yourwebsite.com"
+    },
+    "apisInfo": [
+        {
+            "key": "dog",
+            "apiDetails": {
+                "host": "localhost",
+                "port": 5001,
+                "protocol":"http",
+                "lang": "java",
+                "proxy": {
+                    "host": "",
+                    "port": 8080,
+                    "protocol":"http"
+                }
+            }
+        },
+        {
+            "key": "cat",
+            "apiDetails": {
+                "host": "localhost",
+                "port": 5002,
+                "protocol":"http",
+                "lang": "csharp",
+                "proxy": {
+                    "host": "",
+                    "port": 8080,
+                    "protocol":"http"
+                }
+            }
+        },
+        {
+            "key": "people",
+            "apiDetails": {
+                "host": "localhost",
+                "port": 5003,
+                "protocol":"http",
+                "lang": "csharp",
+                "proxy": {
+                    "host": "",
+                    "port": 8080,
+                    "protocol":"http"
+                }
+            }
+        }
+    ]
+}

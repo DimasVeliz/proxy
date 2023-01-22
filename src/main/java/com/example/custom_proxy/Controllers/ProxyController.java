@@ -40,11 +40,14 @@ public class ProxyController {
         service.printDecodedBody(body);
         service.printCookies(request);
 
-        var forwardedResponse = service.processProxyRequest(body, method, request, response,
-                UUID.randomUUID().toString());
+        if (!service.isFrontEndAllowed(request)) {
+            throw new ResourceNotFoundException(); 
+        }
+
+        var forwardedResponse = service.resolveResource(body, method, request);
+
         
-        System.out.println(forwardedResponse.getBody()); 
-        
+
         return forwardedResponse;
     }
 

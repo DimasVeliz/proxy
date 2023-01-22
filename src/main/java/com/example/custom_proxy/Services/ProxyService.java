@@ -9,6 +9,7 @@ import java.util.Dictionary;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.Iterator;
+import java.util.UUID;
 
 import javax.net.ssl.SSLContext;
 
@@ -38,6 +39,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.example.custom_proxy.Configuration.AppConfiguration;
+import com.example.custom_proxy.Controllers.ResourceNotFoundException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -45,29 +47,30 @@ import jakarta.servlet.http.HttpServletResponse;
 @Service
 public class ProxyService {
 
-    AppConfiguration cofiguration;
+    AppConfiguration configuration;
 
     @Autowired
     public ProxyService(AppConfiguration config) {
-        this.cofiguration = config;
+        this.configuration = config;
     }
 
     @Retryable(exclude = {
             HttpStatusCodeException.class }, include = Exception.class, backoff = @Backoff(delay = 5000, multiplier = 4.0), maxAttempts = 4)
     public ResponseEntity<String> processProxyRequest(String body,
-            HttpMethod method, HttpServletRequest request, HttpServletResponse response, String traceId)
+            HttpMethod method, HttpServletRequest request, ResolverInfo resolverInfo, String traceId)
             throws URISyntaxException, KeyManagementException, NoSuchAlgorithmException, KeyStoreException {
 
         ThreadContext.put("traceId", traceId);
 
-        URI uri = this.buildURI(request);
+        URI uri = this.buildURI(request,resolverInfo);
+
         HttpHeaders headers = loadHeaders(request);
         SetAdditionalHeaders(headers, traceId);
         RemoveExtraHeaders(headers);
 
         HttpEntity<String> httpEntity = new HttpEntity<>(body, headers);
 
-        CloseableHttpClient httpClient = buildClient();
+        CloseableHttpClient httpClient = buildClient(resolverInfo);
 
         HttpComponentsClientHttpRequestFactory clientrequestFactory = new HttpComponentsClientHttpRequestFactory();
 
@@ -98,10 +101,10 @@ public class ProxyService {
 
     }
 
-    private CloseableHttpClient buildClient() {
+    private CloseableHttpClient buildClient(ResolverInfo resolverInfo) {
         // version 5.0
         try {
-            final SSLContext sslcontext = this.configureSSLContext();
+            final SSLContext sslcontext = this.configureSSLContext(resolverInfo);
             
             final SSLConnectionSocketFactory sslSocketFactory = SSLConnectionSocketFactoryBuilder.create()
                     .setSslContext(sslcontext)
@@ -120,9 +123,10 @@ public class ProxyService {
         return null;
     }
 
-    public SSLContext configureSSLContext()
+    public SSLContext configureSSLContext(ResolverInfo resolverInfo)
             throws KeyManagementException, NoSuchAlgorithmException, KeyStoreException {
-        String protocolToUse = this.cofiguration.getBackEndProtocol();
+
+        String protocolToUse = resolverInfo.getApiDetails().getProtocol();
 
         if (!protocolToUse.equals("HTTPS")) {
             return SSLContexts.custom()
@@ -155,14 +159,19 @@ public class ProxyService {
         return headers;
     }
 
-    private URI buildURI(HttpServletRequest request) throws URISyntaxException {
+    private URI buildURI(HttpServletRequest request, ResolverInfo resolverInfo) throws URISyntaxException {
         String requestUrl = request.getRequestURI();
-        String protocolToUse = this.cofiguration.getBackEndProtocol();
         
-        String domain = this.cofiguration.getBackEndHost();
-        int port = this.cofiguration.getBackEndPort();
+        String protocolToUse = resolverInfo.getApiDetails()
+                                           .getProtocol();
+        
+        String hostToUSe = resolverInfo.getApiDetails()
+                                       .getHost();
+                                       
+        int portToUse = resolverInfo.getApiDetails()
+                                    .getPort();
 
-        URI uri = new URI(protocolToUse, null, domain, port, null, null, null);
+        URI uri = new URI(protocolToUse, null, hostToUSe, portToUse, null, null, null);
 
         // replacing context path form urI to match actual gateway URI
         uri = UriComponentsBuilder.fromUri(uri)
@@ -232,6 +241,56 @@ public class ProxyService {
         for (var cookie : cookies) {
             System.out.println(cookie);
         }
+    }
+
+    public boolean isFrontEndAllowed(HttpServletRequest request) {
+        return false;
+    }
+
+    public ResponseEntity<String> resolveResource(String body, HttpMethod method, HttpServletRequest request) throws KeyManagementException, NoSuchAlgorithmException, KeyStoreException, URISyntaxException {
+        
+        String requestUrl = request.getRequestURI();
+
+        ResolverInfo resolverInfo = this.buildResolverInfo(requestUrl);
+        
+        if(!resolverInfo.isIsAvailable())
+        {
+            throw new ResourceNotFoundException(); 
+        }
+
+
+        
+
+        var forwardedResponse = processProxyRequest(body, method, request, resolverInfo, UUID.randomUUID().toString());
+
+        System.out.println(forwardedResponse.getBody());
+        return forwardedResponse;
+
+    }
+
+    private ResolverInfo buildResolverInfo(String requestUrl) {
+        if(!this.validateResourceAvailability(requestUrl))
+        {
+            var info = new ResolverInfo();
+            info.setIsAvailable(false);
+            return info;
+        }
+
+        return this.getInfoForResource(requestUrl);
+    }
+
+    private ResolverInfo getInfoForResource(String requestUrl) {
+        var info = new ResolverInfo();
+        info.setIsAvailable(true);
+        var apiInfo =this.configuration.buildAPIInfo(requestUrl);
+        info.setApiDetails(apiInfo);
+
+        return info;
+        
+    }
+
+    private boolean validateResourceAvailability(String requestUrl) {
+        return this.configuration.hasAPI(requestUrl);
     }
 
 }

@@ -2,47 +2,28 @@ package com.example.custom_proxy.Configuration;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
 
 @Configuration
 public class AppConfiguration {
-    
-    private Environment env;
-    
+
+    private AppConfigInfo configInfo;
+
     @Autowired
-    public AppConfiguration(Environment env) {
-        this.env=env;
+    public AppConfiguration(AppConfigInfo configInfo) {
+        this.configInfo = configInfo;
+
     }
 
-    public String getBackEndHost()
-    {
-        var value = env.getProperty("backend_host");
-        return value;
-    }
-    public int getBackEndPort()
-    {
-        String value = env.getProperty("backend_port");
-        return Integer.parseInt(value);
-    }
-    public String getBackEndProtocol()
-    {
-        var value = env.getProperty("backend_protocol");
-        return value;
+    public AppConfigInfo getConfigInfo() {
+        return configInfo;
     }
 
-    public String getProxyHost()
-    {
-        var value = env.getProperty("proxy_host");
-        return value;
+    public boolean hasAPI(String keyToCheck) {
+        return getConfigInfo().apisInfo.containsKey(keyToCheck);
     }
-    public int getProxyPort()
-    {
-        String value = env.getProperty("proxy_port");
-        return Integer.parseInt(value);
+
+    public ApiDetails buildAPIInfo(String key) {
+        return getConfigInfo().apisInfo.get(key);
     }
-    public String getProxyProtocol()
-    {
-        var value = env.getProperty("proxy_protocol");
-        return value;
-    }
+
 }
