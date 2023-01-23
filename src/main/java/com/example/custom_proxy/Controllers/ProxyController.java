@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.custom_proxy.Services.ProxyService;
+import com.example.custom_proxy.WebModels.ResourceNotFoundException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -39,6 +40,11 @@ public class ProxyController {
         service.printHeaders(request);
         service.printDecodedBody(body);
         service.printCookies(request);
+
+        if(!service.PassesfilterPetition(request))
+        {
+            throw new ResourceNotFoundException(); 
+        }
 
         var forwardedResponse = service.processProxyRequest(body, method, request, response,
                 UUID.randomUUID().toString());

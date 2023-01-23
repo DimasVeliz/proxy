@@ -45,11 +45,11 @@ import jakarta.servlet.http.HttpServletResponse;
 @Service
 public class ProxyService {
 
-    AppConfiguration cofiguration;
+    AppConfiguration configuration;
 
     @Autowired
     public ProxyService(AppConfiguration config) {
-        this.cofiguration = config;
+        this.configuration = config;
     }
 
     @Retryable(exclude = {
@@ -67,7 +67,7 @@ public class ProxyService {
 
         HttpEntity<String> httpEntity = new HttpEntity<>(body, headers);
 
-        CloseableHttpClient httpClient = buildClient();
+        CloseableHttpClient httpClient = buildClient(request);
 
         HttpComponentsClientHttpRequestFactory clientrequestFactory = new HttpComponentsClientHttpRequestFactory();
 
@@ -75,12 +75,7 @@ public class ProxyService {
 
         RestTemplate restTemplate = new RestTemplate(clientrequestFactory);
                 
-        //old
-        //var clientFactory = new SimpleClientHttpRequestFactory();
-
-        //ClientHttpRequestFactory factory = new BufferingClientHttpRequestFactory(clientFactory);
-
-        // RestTemplate restTemplate = new RestTemplate(factory);
+        
         try {
 
             ResponseEntity<String> serverResponse = restTemplate.exchange(uri, method, httpEntity, String.class);
@@ -98,10 +93,10 @@ public class ProxyService {
 
     }
 
-    private CloseableHttpClient buildClient() {
+    private CloseableHttpClient buildClient(HttpServletRequest request) {
         // version 5.0
         try {
-            final SSLContext sslcontext = this.configureSSLContext();
+            final SSLContext sslcontext = this.configureSSLContext(request);
             
             final SSLConnectionSocketFactory sslSocketFactory = SSLConnectionSocketFactoryBuilder.create()
                     .setSslContext(sslcontext)
@@ -119,12 +114,18 @@ public class ProxyService {
         }
         return null;
     }
-
-    public SSLContext configureSSLContext()
+    private String buildProtocol(HttpServletRequest request)
+    {
+        var scheme = request.getScheme();
+        if(scheme.contains("https"))
+            return "https";
+        return "http";
+    }
+    public SSLContext configureSSLContext(HttpServletRequest request)
             throws KeyManagementException, NoSuchAlgorithmException, KeyStoreException {
-        String protocolToUse = this.cofiguration.getBackEndProtocol();
+        String protocolToUse = buildProtocol(request);
 
-        if (!protocolToUse.equals("HTTPS")) {
+        if (!protocolToUse.equals("https")) {
             return SSLContexts.custom()
             .loadTrustMaterial(null, new TrustAllStrategy())
             .build();
@@ -156,17 +157,18 @@ public class ProxyService {
     }
 
     private URI buildURI(HttpServletRequest request) throws URISyntaxException {
-        String requestUrl = request.getRequestURI();
-        String protocolToUse = this.cofiguration.getBackEndProtocol();
         
-        String domain = this.cofiguration.getBackEndHost();
-        int port = this.cofiguration.getBackEndPort();
+        String resourcePath = request.getRequestURI();
+        String protocolToUse = buildProtocol(request);
+        
+        String domain = request.getServerName();
+        int port = request.getServerPort();
 
         URI uri = new URI(protocolToUse, null, domain, port, null, null, null);
 
         // replacing context path form urI to match actual gateway URI
         uri = UriComponentsBuilder.fromUri(uri)
-                .path(requestUrl)
+                .path(resourcePath)
                 .query(request.getQueryString())
                 .build(true).toUri();
         return uri;
@@ -232,6 +234,14 @@ public class ProxyService {
         for (var cookie : cookies) {
             System.out.println(cookie);
         }
+    }
+
+    public boolean PassesfilterPetition(HttpServletRequest request) {
+        String domain = request.getRequestURL().toString();
+        var blackList = configuration.getBlackList();
+        if(blackList.contains(domain))
+            return false;
+        return true;
     }
 
 }
