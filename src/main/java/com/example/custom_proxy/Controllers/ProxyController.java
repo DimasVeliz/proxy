@@ -1,29 +1,23 @@
 package com.example.custom_proxy.Controllers;
 
-import java.net.URISyntaxException;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.util.Objects;
+import java.io.IOException;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import com.example.custom_proxy.Dto.ProxyResponseDto;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.example.custom_proxy.Services.ProxyService;
+import com.example.custom_proxy.Services.Impl.ProxyService;
 import com.example.custom_proxy.WebModels.ResourceNotFoundException;
 
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 @RestController
 public class ProxyController {
@@ -40,7 +34,7 @@ public class ProxyController {
     @GetMapping("/**")
     public ResponseEntity<Object> processGetRequest(HttpServletRequest request) {
 
-        logIncomingRequest(request);
+        logIncomingRequestInfo(request);
 
 
         if(!service.PassesfilterPetition(request))
@@ -55,7 +49,7 @@ public class ProxyController {
     @PostMapping("/**")
     public ResponseEntity<Object> processPostRequest(@RequestBody String body,HttpServletRequest request) {
 
-        logIncomingRequest(request);
+        logIncomingRequestInfo(request);
 
 
         if(!service.PassesfilterPetition(request))
@@ -70,7 +64,7 @@ public class ProxyController {
     @PutMapping("/**")
     public ResponseEntity<Object> processPutRequest(@RequestBody String body, HttpServletRequest request) {
 
-        logIncomingRequest(request);
+        logIncomingRequestInfo(request);
 
 
         if(!service.PassesfilterPetition(request))
@@ -85,7 +79,7 @@ public class ProxyController {
     @DeleteMapping("/**")
     public ResponseEntity<Object> processDeleteRequest(HttpServletRequest request) {
 
-        logIncomingRequest(request);
+        logIncomingRequestInfo(request);
 
 
         if(!service.PassesfilterPetition(request))
@@ -101,13 +95,22 @@ public class ProxyController {
     private ResponseEntity<Object> setResponse(ProxyResponseDto forwardedResponse) {
         HttpHeaders headers = new HttpHeaders();
         if(forwardedResponse.isBinary()){
-            return new ResponseEntity<>(forwardedResponse.getBinaryData().getBinaryData(),headers, HttpStatus.OK);
+            headers.add(HttpHeaders.CONTENT_DISPOSITION,forwardedResponse.getBinaryData().getFileExtension());
+            headers.add(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_OCTET_STREAM_VALUE);
+            return new ResponseEntity<>(forwardedResponse.getBinaryData().getEncodedContent(),headers, HttpStatus.OK);
 
         }
+        headers.add(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
         return new ResponseEntity<>(forwardedResponse.getJsonData(),headers, HttpStatus.OK);
     }
 
     private void logIncomingRequestInfo(HttpServletRequest request) {
+        String body = "";
+        try {
+            body = request.getReader().lines().collect(Collectors.joining(System.lineSeparator()));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         service.printURL(request);
         service.printQueryString(request);
         service.printHeaders(request);
