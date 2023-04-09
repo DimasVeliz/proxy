@@ -11,12 +11,14 @@ public class RequestResources {
     private String uri;
     private Mono<String> body;
     MultiValueMap<String, String> paramInfo;
+    private String base;
 
-    public RequestResources(String uri, Mono<String> bodyMono, MultiValueMap<String, String> queryParams) {
+    public RequestResources(String uri, Mono<String> bodyMono, MultiValueMap<String, String> queryParams,String base) {
 
         this.uri = uri;
         this.body = bodyMono;
         this.paramInfo = queryParams;
+        this.base=base;
     }
 
 
@@ -50,5 +52,13 @@ public class RequestResources {
 
     public void setParamInfo(MultiValueMap<String, String> paramInfo) {
         this.paramInfo = paramInfo;
+    }
+
+    public String getBase() {
+        return base;
+    }
+
+    public void setBase(String base) {
+        this.base = base;
     }
 }

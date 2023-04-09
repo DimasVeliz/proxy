@@ -259,6 +259,14 @@ public class ProxyService implements IProxyService {
     }
 
     private RequestResources extractResources(HttpServletRequest request, String body) {
+        // Extract the host, port, and protocol from the request object
+        String host = request.getServerName();
+        int port = request.getServerPort();
+        String protocol = request.getScheme();
+
+        // Create a URL string from the extracted values
+        String baseURL = String.format("%s://%s:%d", protocol, host, port);
+
         String rawURI = request.getRequestURI();
         String uri = StringUtils.hasText(rawURI)?rawURI:"";
         Mono<String> bodyMono = StringUtils.hasText(body)?Mono.just(body):Mono.never();
@@ -267,7 +275,7 @@ public class ProxyService implements IProxyService {
 
         MultiValueMap<String, String> queryParams = extractQueryParams(queryString);
 
-        RequestResources resources = new RequestResources(uri,bodyMono,queryParams);
+        RequestResources resources = new RequestResources(uri,bodyMono,queryParams,baseURL);
 
 
         return resources;
@@ -299,7 +307,7 @@ public class ProxyService implements IProxyService {
     }
 
     private ProxyResponseDto resolveResponse(RequestResources extractedResources, String method) {
-        WebClient client = clientSelector(extractedResources.isBinary());
+        WebClient client = clientSelector(extractedResources.isBinary(),extractedResources.getBase());
         WebClient.RequestHeadersSpec<?> base = createBase(extractedResources, client, method);
         ProxyResponseDto response = decodeResponse(base, extractedResources);
         return response;
@@ -359,8 +367,8 @@ public class ProxyService implements IProxyService {
         return value;
     }
 
-    private WebClient clientSelector(boolean isBinaryClient) {
-        return isBinaryClient ? config.getBinaryClient() : config.getJSONClient();
+    private WebClient clientSelector(boolean isBinaryClient,String base) {
+        return isBinaryClient ? config.getBinaryClient(base) : config.getJSONClient(base);
     }
 
     public ProxyResponseDto processGetRequest(HttpServletRequest request, String trackingID) {
