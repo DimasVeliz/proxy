@@ -40,6 +40,7 @@ import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
@@ -282,7 +283,7 @@ public class ProxyService implements IProxyService {
     }
 
     private MultiValueMap<String, String> extractQueryParams(String queryString) {
-        Map<String, String> queryParams = new HashMap<>();
+        Map<String, List<String>> queryParams = new HashMap<>();
         if (queryString != null) {
             String[] queryParamsArray = queryString.split("&");
             for (String queryParam : queryParamsArray) {
@@ -297,10 +298,13 @@ public class ProxyService implements IProxyService {
                     } catch (UnsupportedEncodingException e) {
                         throw new RuntimeException(e);
                     }
-                    queryParams.put(key, value);
+                    List<String> array = new ArrayList<>();
+                    array.add(value);
+                    queryParams.put(key, array);
                 }
             }
         }
+
         LinkedMultiValueMap<String,String> response = new LinkedMultiValueMap<>(queryParams);
 
         return response;

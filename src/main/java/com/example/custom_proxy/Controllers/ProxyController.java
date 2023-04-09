@@ -12,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import com.example.custom_proxy.Services.Impl.ProxyService;
@@ -34,7 +35,7 @@ public class ProxyController {
     @GetMapping("/**")
     public ResponseEntity<Object> processGetRequest(HttpServletRequest request) {
 
-        logIncomingRequestInfo(request);
+        logIncomingRequestInfo(request,null);
 
 
         if(!service.PassesfilterPetition(request))
@@ -49,7 +50,7 @@ public class ProxyController {
     @PostMapping("/**")
     public ResponseEntity<Object> processPostRequest(@RequestBody String body,HttpServletRequest request) {
 
-        logIncomingRequestInfo(request);
+        logIncomingRequestInfo(request,body);
 
 
         if(!service.PassesfilterPetition(request))
@@ -64,7 +65,7 @@ public class ProxyController {
     @PutMapping("/**")
     public ResponseEntity<Object> processPutRequest(@RequestBody String body, HttpServletRequest request) {
 
-        logIncomingRequestInfo(request);
+        logIncomingRequestInfo(request,body);
 
 
         if(!service.PassesfilterPetition(request))
@@ -79,7 +80,7 @@ public class ProxyController {
     @DeleteMapping("/**")
     public ResponseEntity<Object> processDeleteRequest(HttpServletRequest request) {
 
-        logIncomingRequestInfo(request);
+        logIncomingRequestInfo(request,null);
 
 
         if(!service.PassesfilterPetition(request))
@@ -104,17 +105,13 @@ public class ProxyController {
         return new ResponseEntity<>(forwardedResponse.getJsonData(),headers, HttpStatus.OK);
     }
 
-    private void logIncomingRequestInfo(HttpServletRequest request) {
-        String body = "";
-        try {
-            body = request.getReader().lines().collect(Collectors.joining(System.lineSeparator()));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+    private void logIncomingRequestInfo(HttpServletRequest request,String body) {
+
         service.printURL(request);
         service.printQueryString(request);
         service.printHeaders(request);
-        service.printDecodedBody(body);
+        if(StringUtils.hasText(body))
+            service.printDecodedBody(body);
         service.printCookies(request);
     }
 
